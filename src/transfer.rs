@@ -416,7 +416,7 @@ fn available_balance(
 /// `trailing_ixs` (with `trailing_signers`) are appended to the final write tx
 /// so the caller's create-context + verify-from-account ride along for free.
 /// Returns one signature per transaction sent.
-fn stage_range_proof_record(
+pub(crate) fn stage_range_proof_record(
     client: &RpcClient,
     payer: &dyn Signer,
     record_account: &Keypair,

@@ -28,8 +28,6 @@ async fn test_configure_account() {
 
     // Create mint authority
     let mint_authority = Keypair::new();
-    env.airdrop_if_needed(&mint_authority.pubkey(), 100_000_000)
-        .expect("Airdrop to mint authority failed");
 
     // Create confidential mint
     let mint = create_confidential_mint(&env, &mint_authority, 9)
@@ -37,8 +35,6 @@ async fn test_configure_account() {
 
     // Create user account
     let user = Keypair::new();
-    env.airdrop_if_needed(&user.pubkey(), 100_000_000)
-        .expect("Airdrop to user failed");
 
     // Create token account
     let _token_account = create_token_account(&env, &mint.pubkey(), &user.pubkey())
@@ -66,8 +62,6 @@ async fn test_deposit_and_apply_pending() {
 
     // Create mint authority
     let mint_authority = Keypair::new();
-    env.airdrop_if_needed(&mint_authority.pubkey(), 100_000_000)
-        .expect("Airdrop to mint authority failed");
 
     // Create confidential mint
     let mint = create_confidential_mint(&env, &mint_authority, 9)
@@ -75,8 +69,6 @@ async fn test_deposit_and_apply_pending() {
 
     // Create user account
     let user = Keypair::new();
-    env.airdrop_if_needed(&user.pubkey(), 100_000_000)
-        .expect("Airdrop to user failed");
 
     // Create token account
     let token_account = create_token_account(&env, &mint.pubkey(), &user.pubkey())
@@ -130,8 +122,6 @@ async fn test_full_flow_deposit_apply_withdraw() {
 
     // Create mint authority
     let mint_authority = Keypair::new();
-    env.airdrop_if_needed(&mint_authority.pubkey(), 100_000_000)
-        .expect("Airdrop to mint authority failed");
 
     // Create confidential mint
     let mint = create_confidential_mint(&env, &mint_authority, 9)
@@ -139,8 +129,6 @@ async fn test_full_flow_deposit_apply_withdraw() {
 
     // Create user account
     let user = Keypair::new();
-    env.airdrop_if_needed(&user.pubkey(), 100_000_000)
-        .expect("Airdrop to user failed");
 
     // Create token account
     let token_account = create_token_account(&env, &mint.pubkey(), &user.pubkey())
@@ -191,15 +179,6 @@ async fn test_full_flow_deposit_apply_withdraw() {
         9,
     ).await;
 
-    if let Err(e) = &withdraw_result {
-        // Transaction size errors are expected with inline proofs
-        if e.to_string().contains("too large") {
-            println!("⚠️  Withdraw failed due to transaction size (expected with inline proofs)");
-            println!("✅ test_full_flow_deposit_apply_withdraw PASSED (withdraw shows expected size limitation)");
-            return;
-        }
-    }
-
     assert!(withdraw_result.is_ok(), "Failed to withdraw: {:?}", withdraw_result.err());
     println!("✅ test_full_flow_deposit_apply_withdraw PASSED");
 
@@ -219,8 +198,6 @@ async fn test_multiple_deposits_and_applies() {
 
     // Create mint authority
     let mint_authority = Keypair::new();
-    env.airdrop_if_needed(&mint_authority.pubkey(), 100_000_000)
-        .expect("Airdrop to mint authority failed");
 
     // Create confidential mint
     let mint = create_confidential_mint(&env, &mint_authority, 9)
@@ -228,8 +205,6 @@ async fn test_multiple_deposits_and_applies() {
 
     // Create user account
     let user = Keypair::new();
-    env.airdrop_if_needed(&user.pubkey(), 100_000_000)
-        .expect("Airdrop to user failed");
 
     // Create token account
     let token_account = create_token_account(&env, &mint.pubkey(), &user.pubkey())
@@ -284,8 +259,6 @@ async fn test_confidential_transfer_between_accounts() {
 
     // Create mint authority
     let mint_authority = Keypair::new();
-    env.airdrop_if_needed(&mint_authority.pubkey(), 100_000_000)
-        .expect("Airdrop to mint authority failed");
 
     // Create confidential mint
     let mint = create_confidential_mint(&env, &mint_authority, 9)
@@ -294,10 +267,6 @@ async fn test_confidential_transfer_between_accounts() {
     // Create two users (sender and recipient)
     let sender = Keypair::new();
     let recipient = Keypair::new();
-    env.airdrop_if_needed(&sender.pubkey(), 100_000_000)
-        .expect("Airdrop to sender failed");
-    env.airdrop_if_needed(&recipient.pubkey(), 100_000_000)
-        .expect("Airdrop to recipient failed");
 
     // Create token accounts for both users
     let sender_token_account = create_token_account(&env, &mint.pubkey(), &sender.pubkey())

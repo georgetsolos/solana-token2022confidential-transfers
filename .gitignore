@@ -3,3 +3,13 @@ test-ledger/
 .env
 .env.local
 .env*.local
+
+# Local development files
+*.bak
+*.before-withdraw-fix
+/test-ledger/
+/target/
+.env
+id.json
+*keypair*.json
+*wallet*.json
