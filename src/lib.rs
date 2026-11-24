@@ -13,3 +13,6 @@ pub mod transfer;
 
 // Re-export common types
 pub use types::*;
+pub mod extensions;
+pub mod kyc;
+pub mod fee_transfer;
