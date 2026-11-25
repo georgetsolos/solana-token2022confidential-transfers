@@ -18,3 +18,4 @@ pub mod kyc;
 pub mod fee_transfer;
 pub mod migration;
 pub mod confidential_approval;
+pub mod confidential_fee_transfer;
