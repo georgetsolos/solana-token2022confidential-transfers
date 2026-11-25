@@ -16,3 +16,5 @@ pub use types::*;
 pub mod extensions;
 pub mod kyc;
 pub mod fee_transfer;
+pub mod migration;
+pub mod confidential_approval;
