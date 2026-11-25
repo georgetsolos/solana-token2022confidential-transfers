@@ -27,9 +27,13 @@ use spl_token_2022::{
         confidential_transfer::instruction::{
             configure_account, PubkeyValidityProofData as PubkeyValidityProofDataLegacy,
         },
+        transfer_fee::TransferFeeConfig,
+        BaseStateWithExtensions,
+        StateWithExtensions,
         ExtensionType,
     },
     instruction::reallocate,
+    state::Mint,
     solana_zk_sdk::encryption::pod::auth_encryption::PodAeCiphertext as PodAeCiphertextLegacy,
 };
 use spl_token_confidential_transfer_proof_extraction::instruction::ProofLocation;
@@ -68,13 +72,38 @@ pub async fn configure_account_for_confidential_transfers(
     let context_state_size = size_of::<ProofContextState<PubkeyValidityProofContext>>();
     let context_state_rent = client.get_minimum_balance_for_rent_exemption(context_state_size)?;
 
+    // Read the mint extensions before allocating account space.
+    let mint_account = client.get_account(mint)?;
+
+    let mint_state =
+        StateWithExtensions::<Mint>::unpack(
+            &mint_account.data,
+        )?;
+
+    let mut required_extensions = vec![
+        ExtensionType::ConfidentialTransferAccount,
+    ];
+
+    if mint_state
+        .get_extension::<TransferFeeConfig>()
+        .is_ok()
+    {
+        required_extensions.push(
+            ExtensionType::ConfidentialTransferFeeAmount,
+        );
+
+        println!(
+            "Allocating additional confidential fee extension"
+        );
+    }
+
     let realloc_ix = reallocate(
         &spl_token_2022::id(),
         &token_account,
         &payer.pubkey(),
         &authority.pubkey(),
         &[&authority.pubkey()],
-        &[ExtensionType::ConfidentialTransferAccount],
+        &required_extensions,
     )?;
 
     let create_proof_account_ix = system_instruction::create_account(
