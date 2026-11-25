@@ -1,346 +1,517 @@
-# Confidential Balances Workshop
+# Solana Token-2022: Regulated Tokens and Confidential Transfers
 
-A comprehensive workshop for understanding and implementing Solana's Confidential Balances feature in Token-2022 (Token Extensions).
+![Rust](https://img.shields.io/badge/Rust-2021-orange)
+![Solana](https://img.shields.io/badge/Solana-Token--2022-purple)
+![Tests](https://img.shields.io/badge/tests-12%20passed-brightgreen)
+![Network](https://img.shields.io/badge/network-Localnet-blue)
 
-## What are Confidential Balances?
+## Overview
 
-Confidential Balances is a set of Token-2022 extensions that enable **privacy on Solana asset transfers**. Instead of all token amounts being visible on-chain, balances and transfer amounts are encrypted using advanced cryptographic techniques.
+This project was developed as part of the Solana
+Development Cohort Week 4 assignment.
 
-### Token-2022 Extensions Involved
+It demonstrates how Solana Token-2022 extensions can
+be combined to support regulated digital assets,
+compliance controls, confidential balances,
+encrypted transfer fees, and token migration.
 
-Confidential Balances uses the **Token-2022 (Token Extensions) program**, which allows modular features to be added to tokens.
+The project extends the original Solana Foundation
+Confidential Balances Sample with additional
+functionality, integration tests, compatibility
+fixes, and a security investigation.
 
-| Extension | Extension Type | Applied To | Required | Purpose |
-|-----------|----------------|------------|----------|---------|
-| **ConfidentialTransferMint** | `ExtensionType(11)` | Mint | Yes | Configures mint-level settings (auditor, authority, auto-approval) |
-| **ConfidentialTransferAccount** | `ExtensionType(12)` | Token Account | Yes | Stores encrypted balances and encryption keys |
-| **ConfidentialTransferFeeConfig** | `ExtensionType(13)` | Mint | Optional | Enables confidential transfer fee calculation |
-| **ConfidentialMintBurn** | `ExtensionType(33)` | Mint | Optional | Allows private token issuance (disables deposit/withdraw) |
+## Project Objectives
 
-**Key Points:**
-- Extensions must be initialized **at creation time** (cannot be added later)
-- Account space must be allocated to fit extension data
-- Token-2022 Program ID: `TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb`
+- Understand the Token-2022 extension architecture.
+- Create regulated token mints.
+- Implement simulated KYC approval controls.
+- Calculate and collect public transfer fees.
+- Implement Permanent Delegate authority.
+- Enable manually approved confidential accounts.
+- Execute confidential transfers with encrypted fees.
+- Implement atomic token balance migration.
+- Investigate administrative asset-recovery limitations.
 
-### Privacy Levels
+## Implementation
 
-Confidential Balances support varying degrees of configurable privacy:
+### V1: Regulated Token Mint
 
-1. **Disabled** - No confidentiality (standard SPL tokens)
-2. **Whitelisted** - Only approved accounts can use confidential transfers
-3. **Opt-in** - Users choose to enable confidentiality
-5. **Required** - All transfers must be confidential
+The first mint version contains four extensions:
 
-## Cryptographic Foundations
+| Extension | Purpose |
+|-----------|---------|
+| TransferFeeConfig | Configurable transfer fees |
+| MetadataPointer | Self-referencing metadata pointer |
+| DefaultAccountState | New accounts start frozen |
+| MintCloseAuthority | Administrative mint closure authority |
 
-The privacy is achieved through:
+The mint account size is calculated dynamically using
+ExtensionType::try_calculate_account_len.
 
-- **Twisted ElGamal Encryption** - Homomorphic encryption enabling arithmetic on encrypted data (Curve25519/Ristretto)
-- **AES-GCM-SIV** - Authenticated encryption for efficient balance viewing by account owners
-- **Pedersen Commitments** - Binding, hiding commitments for zero-knowledge proofs
-- **Sigma Protocols (ZKPs)** - Proves validity without revealing amounts
+All required mint extensions are initialized before
+the base mint initialization.
 
-### ZK ElGamal Proof Program
+### V2: Regulated Confidential Token Mint
 
-Confidential transfers require zero-knowledge proofs verified by a dedicated Solana program:
-- **Program ID**: `ZkE1Gama1Proof11111111111111111111111111111`
-- **Purpose**: Verifies equality, range, and validity proofs on-chain
-- **Integration**: Token-2022 instructions reference proof context accounts
+The second mint retains the four original extensions
+and adds:
+
+| Extension | Purpose |
+|-----------|---------|
+| PermanentDelegate | Administrative public token authority |
+| ConfidentialTransferMint | Confidential balance configuration |
+| ConfidentialTransferFeeConfig | Encrypted transfer fees |
+
+Confidential account approval is manual.
+
+### Mint Configuration
+
+| Parameter | V1 | V2 |
+|-----------|----|----|
+| Decimals | 9 | 9 |
+| Transfer fee | 1% | 1% |
+| Maximum fee | 0.1 tokens | 0.1 tokens |
+| Default account state | Frozen | Frozen |
+| Permanent Delegate | No | Yes |
+| Confidential transfers | No | Yes |
+| Confidential approval | N/A | Manual |
+| Mint size | 387 bytes | 625 bytes |
+
+These settings are demonstration parameters selected
+for the educational implementation.
+
+## KYC and Compliance Controls
+
+New token accounts are frozen by default.
+
+An administrator must thaw an account before normal
+token operations can proceed.
+
+The implementation supports:
+
+- Account approval through thaw_account.
+- Account restriction through freeze_account.
+- Reading account state using StateWithExtensions.
+- Manual confidential account approval.
+- Rejection of unauthorized approval attempts.
+
+KYC is simulated through administrative account
+approval. No external identity verification service
+is integrated.
+
+## Public Transfer Fees
+
+Public transfers use transfer_checked_with_fee.
+
+The implementation reads the current epoch fee
+configuration from the mint and calculates the
+expected fee before submitting the transaction.
+
+Example:
+
+| Description | Tokens |
+|-------------|--------|
+| Gross transfer | 2.00 |
+| Transfer fee | 0.02 |
+| Recipient receives | 1.98 |
+
+The withheld fee is verified by integration tests.
+
+## Confidential Transfer Lifecycle
+
+```mermaid
+flowchart TD
+    A[Create V2 mint] --> B[Create frozen token account]
+    B --> C[KYC approval and thaw]
+    C --> D[Configure confidential account]
+    D --> E[Manual administrator approval]
+    E --> F[Deposit public tokens]
+    F --> G[Apply pending balance]
+    G --> H[Generate zero-knowledge proofs]
+    H --> I[Confidential transfer with fee]
+    I --> J[Recipient applies pending balance]
+    J --> K[Confidential withdrawal]
+```
+
+The confidential balance implementation uses:
+
+- Twisted ElGamal encryption.
+- Authenticated AES encryption.
+- Zero-knowledge proofs.
+- Temporary proof context state accounts.
+- SPL Record accounts for oversized proof data.
+
+The project uses existing Solana cryptographic
+libraries rather than implementing custom
+cryptographic primitives.
+
+## Confidential Transfers with Encrypted Fees
+
+The fee-aware confidential transfer implementation
+generates five proof types:
+
+1. Ciphertext commitment equality proof.
+2. Transfer amount ciphertext validity proof.
+3. Percentage-with-cap proof.
+4. Fee ciphertext validity proof.
+5. Batched range proof.
+
+Proof data is staged using SPL Record accounts to
+accommodate transaction size restrictions.
+
+### Verified Example
+
+The integration test starts with one token.
+
+| Balance | Tokens |
+|---------|--------|
+| Sender public balance | 0.200 |
+| Sender confidential balance | 0.600 |
+| Recipient confidential balance | 0.198 |
+| Encrypted withheld fee | 0.002 |
+| Total | 1.000 |
+
+The test independently decrypts the relevant
+confidential balances and verifies conservation
+of the original token amount.
+
+## Atomic V1 to V2 Migration
+
+The migration implementation burns V1 tokens and
+mints the equivalent amount of V2 tokens within
+the same Solana transaction.
+
+The owner and administrator must authorize the
+migration.
+
+Validation includes:
+
+- Correct token program ownership.
+- Compatible mint decimals.
+- Expected mint extensions.
+- Administrator authorization.
+- Account ownership.
+- KYC account state.
+- Sufficient public token balance.
+
+### Verified Migration Example
+
+| Balance | Before | After |
+|---------|--------|-------|
+| V1 tokens | 10 | 4 |
+| V2 tokens | 0 | 6 |
+| Total supply | 10 | 10 |
+
+The implementation is a client-side migration
+helper using existing Token-2022 instructions.
+
+It is not a separately deployed migration program.
+
+## Security Investigation
+
+### Permanent Delegate and Confidential Balances
+
+The project investigates the limitations of
+administrative recovery authority when confidential
+balances are enabled.
+
+The experiment verified that:
+
+- Permanent Delegate can transfer public balances.
+- Ordinary transfers cannot spend encrypted balances.
+- Administrators can freeze token accounts.
+- Confidential withdrawals from frozen accounts
+  are rejected.
+- The confidential balance remains unchanged.
+
+The main finding is that freezing confidential
+funds and recovering confidential funds are
+different capabilities.
+
+See the complete [Security Report](SECURITY.md).
 
 ## Repository Structure
 
-```
+```text
 .
-├── src/                            # Core implementation
-│   ├── configure.rs                # Configure accounts for confidential transfers
-│   ├── deposit.rs                  # Deposit from public to confidential
-│   ├── apply_pending.rs            # Apply pending to available balance
-│   ├── withdraw.rs                 # Withdraw from confidential to public
-│   ├── transfer.rs                 # Confidential transfer between accounts
+├── src/
+│   ├── extensions.rs
+│   ├── kyc.rs
+│   ├── fee_transfer.rs
+│   ├── migration.rs
+│   ├── confidential_approval.rs
+│   ├── confidential_fee_transfer.rs
+│   ├── configure.rs
+│   ├── deposit.rs
+│   ├── apply_pending.rs
+│   ├── withdraw.rs
+│   ├── transfer.rs
+│   ├── keys.rs
+│   ├── types.rs
+│   ├── lib.rs
 │   └── bin/
-│       └── demo-server.rs          # HTTP API wrapping the modules (used by the slide-deck demo)
-├── examples/
-│   ├── run_transfer.rs             # End-to-end transfer with balance display
-│   └── get_balances.rs             # Query and decrypt all balance types
+│       └── demo-server.rs
 ├── tests/
-│   ├── integration_test.rs         # Integration tests for all operations
-│   └── common/                     # Test utilities
+│   ├── common/
+│   ├── integration_test.rs
+│   ├── extensions_test.rs
+│   ├── migration_test.rs
+│   ├── confidential_approval_test.rs
+│   ├── confidential_fee_transfer_test.rs
+│   ├── v2_withdrawal_test.rs
+│   ├── balance_migration_test.rs
+│   └── security_test.rs
+├── examples/
 ├── docs/
-│   ├── guides/
-│   │   ├── product-guide.md        # High-level product overview
-│   │   └── wallet-integration.md   # Guide for wallet developers
-│   ├── reference/
-│   │   ├── token-extensions.md     # Token-2022 program architecture
-│   │   ├── cryptography.md         # Encryption & proof details
-│   │   └── rust-deps.md            # Rust crate reference
-│   └── FAQ.md                      # Troubleshooting & common issues
-└── README.md                       # This file
+├── evidence/
+│   └── final-test-results.txt
+├── SECURITY.md
+├── Cargo.toml
+├── Cargo.lock
+└── README.md
 ```
 
-## Key Dependencies
+## Technology Stack
 
-### Rust Crates
+| Technology | Version |
+|------------|---------|
+| Rust | 1.100.0 |
+| Solana CLI | 4.1.2 |
+| Rust edition | 2021 |
+| solana-sdk | 3.0.0 |
+| solana-client | 3.1.6 |
+| solana-zk-sdk | 6.0.1 |
+| solana-zk-sdk (key derivation) | 7.0.1 |
+| spl-token-2022 | 10.0.0 |
+| spl-token-client | 0.18.0 |
+| spl-associated-token-account | 8.0.0 |
+| spl-record | 0.4.0 |
+| Proof generation | 0.6.0 |
+| Proof extraction | 0.5.1 |
 
-```toml
-# Solana core. zk-sdk is at 6.0.1 because the deployed devnet ZK ElGamal Proof
-# program now expects 6.0.1-format proofs.
-solana-sdk = "3.0.0"
-solana-client = "3.1.6"
-solana-zk-sdk = "6.0.1"
-
-# SPL Token-2022. proof-extraction stays at 0.5.1 (matches spl-token-2022's
-# transitive zk-sdk 4.0) so we can name the legacy `ProofLocation` type at the
-# instruction boundary. proof-generation is on 0.6.0 (zk-sdk 6.0.1) for the
-# actual proof bytes.
-spl-token-2022 = "10.0.0"
-spl-token-client = "0.18.0"
-spl-associated-token-account = "8.0.0"
-spl-token-confidential-transfer-proof-generation = "0.6.0"
-spl-token-confidential-transfer-proof-extraction = "0.5.1"
-
-# Bypass-mode helpers (see "Bypass mode" below)
-solana-zk-elgamal-proof-interface = "0.1.2"
-solana-zk-sdk-pod = "0.1.1"
-solana-address = "2.6"
-bytemuck = "1.25"
-```
-
-### Bypass mode (the 4.0 ↔ 6.0.1 boundary)
-
-This split is a **stopgap, not a design choice**. `spl-token-client` and
-`spl-token-2022` should be on the agave v4 beta / rc crates (which target
-`solana-zk-sdk = 6.0.1` natively), but those Agave v4 crates haven't been
-published yet. Until they are, `spl-token-2022 = 10.0.0` transitively pulls
-`solana-zk-sdk = 4.0` for its public API while the deployed ZK ElGamal Proof
-program on devnet verifies 6.0.1-format proofs. This repo bridges the gap:
-
-1. Derive ElGamal + AES keys with `solana-zk-sdk = 6.0.1` directly.
-2. Generate proofs with `proof-generation = 0.6.0`.
-3. Pre-verify each proof into a `ProofContextState` account.
-4. Reference those accounts in spl-token-2022's instruction builders via
-   `ProofLocation::ContextStateAccount` — a phantom-typed `Pubkey` that
-   carries no proof bytes, so the version mismatch never crosses the FFI.
-5. Cross the type boundary only at on-chain PODs (ElGamal pubkey/ciphertext,
-   AES ciphertext) using zero-copy byte casts, since their wire format is
-   identical between 4.0 and 6.0.1.
-
-Every module in `src/` follows this pattern; `*Legacy` aliases mark the
-4.0 side of the boundary. Once the v4 crates are published, the bypass and
-the `*Legacy` aliases can be deleted and everything routes through 6.0.1
-directly.
-
-## Quick Start
+## Local Development Setup
 
 ### Prerequisites
 
-- Solana CLI 2.1.13+ (`solana --version`)
-- SPL Token CLI 5.1.0+ (`spl-token --version`)
-- Rust 1.70+
+- Linux or Windows with WSL2.
+- Rust and Cargo.
+- Solana CLI.
+- Git.
+- Internet access for dependency and program downloads.
 
-### Running the Example Implementation
-
-This repository includes a complete Rust implementation of all confidential transfer operations:
-
-```bash
-# Start local test validator
-solana-test-validator --quiet --reset &
-
-# Run all integration tests
-cargo test --test integration_test
-
-# Run a specific test
-cargo test test_confidential_transfer_between_accounts -- --nocapture
-
-# Run end-to-end transfer example (shows balance changes throughout)
-SOLANA_RPC_URL=https://zk-edge.surfnet.dev:8899 \
-PAYER_KEYPAIR=$(cat ~/.config/solana/id.json) \
-cargo run --example run_transfer
-
-# Query and display encrypted balances
-SOLANA_RPC_URL=https://zk-edge.surfnet.dev:8899 \
-MINT_ADDRESS=<mint> \
-OWNER_KEYPAIR=$(cat ~/.config/solana/id.json) \
-cargo run --example get_balances
-```
-
-**Available Operations:**
-- `src/configure.rs` - Configure token accounts for confidential transfers
-- `src/deposit.rs` - Deposit from public to confidential balance
-- `src/apply_pending.rs` - Apply pending balance to available balance
-- `src/withdraw.rs` - Withdraw from confidential to public balance
-- `src/transfer.rs` - Transfer confidentially between accounts (with proof context state accounts)
-
-**Examples:**
-- `examples/run_transfer.rs` - Complete end-to-end transfer with balance display at each step
-- `examples/get_balances.rs` - Query and decrypt all balance types (public, pending, available)
-
-All operations are tested in `tests/integration_test.rs` with complete end-to-end flows.
-
-### Try it with CLI
+### Verify Installed Tools
 
 ```bash
-# Run the official confidential transfer example script
-curl -sSf https://raw.githubusercontent.com/solana-program/token-2022/main/clients/cli/examples/confidential-transfer.sh | bash
+rustc --version
+cargo --version
+solana --version
 ```
 
-### Demo server (for the zkproof8 slide deck)
+### Compile the Library
 
-The `demo-server` binary wraps the modules above in a small HTTP API so a webapp
-deck can drive a live confidential transfer on stage. Single-tenant, in-memory,
-all keypairs in `.env`.
-
-It's the backend for the **zkproof8 talk** slide deck:
-[gitteri/zkproof8-talk](https://github.com/gitteri/zkproof8-talk/) — the
-webapp there calls these endpoints to drive the live transfer.
-
-**One-time setup:**
+From the repository root:
 
 ```bash
-# Generate a fresh .env with five keypairs (PAYER / MINT / SENDER / RECEIVER / AUDITOR)
-cargo run --bin demo-server -- generate-env > .env
-
-# The output prints PAYER pubkey to stderr — fund it.
-solana airdrop 5 <PAYER_PUBKEY> --url https://api.devnet.solana.com
+cargo +stable check --lib
 ```
 
-**Run the server:**
+### Prepare Compatible Program Binaries
+
+The bundled local Token-2022 program encountered
+compatibility problems with confidential deposits
+during development.
+
+The tested solution was to load compatible
+Token-2022 and SPL Record program binaries from
+Devnet into a local validator.
 
 ```bash
-cargo run --bin demo-server
-# listens on http://localhost:8088
+mkdir -p "$HOME/week4-token22-programs"
+
+solana program dump \
+TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb \
+"$HOME/week4-token22-programs/token2022-devnet.so" \
+--url https://api.devnet.solana.com
+
+solana program dump \
+recr1L3PCGKLbckBqMNcJhuuyU1zgo8nBhfLVsJNwr5 \
+"$HOME/week4-token22-programs/spl-record-devnet.so" \
+--url https://api.devnet.solana.com
 ```
 
-**Endpoints:**
+These are read-only downloads and do not require
+spending Devnet SOL.
 
-| Method | Path                  | Body                              | Notes                                                        |
-| ------ | --------------------- | --------------------------------- | ------------------------------------------------------------ |
-| GET    | `/demo/health`        |                                   | `{ ok, validator_reachable, mint, port, rpc_url }`           |
-| GET    | `/demo/state`         |                                   | full ledger snapshot for the four-column slide               |
-| POST   | `/demo/init`          |                                   | idempotent: mint if missing, configure ATAs, top up sender   |
-| POST   | `/demo/transfer`      | `{ "amount_ui": 250000 }` opt.    | runs the full confidential transfer flow                     |
-| POST   | `/demo/apply-pending` | `{ "account": "sender"\|"receiver" }` | moves pending balance to available                       |
+Program binaries may change over time. Verify
+compatibility before reproducing the tests.
 
-`SOLANA_RPC_URL` selects devnet or local (`surfpool`, etc). All demo state
-resets when keypairs in `.env` are rotated; soft reset on devnet just re-runs
-`/demo/init`.
+### Start the Local Validator
 
-## Core Operations Flow
+Open Terminal 1:
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    CONFIDENTIAL TRANSFER FLOW               │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  Sender                                     Recipient       │
-│    │                                           │            │
-│    │  1. Deposit (public → pending)            │            │
-│    │  ──────────────────────────►              │            │
-│    │                                           │            │
-│    │  2. Apply (pending → available)           │            │
-│    │  ──────────────────────────►              │            │
-│    │                                           │            │
-│    │  3. Transfer (with ZK proofs)             │            │
-│    │  ─────────────────────────────────────────►            │
-│    │                                           │            │
-│    │                              4. Apply     │            │
-│    │                              (pending →   │            │
-│    │                               available)  │            │
-│    │                                           │            │
-│    │                              5. Withdraw  │            │
-│    │                              (available → │            │
-│    │                               public)     │            │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
+```bash
+solana-test-validator \
+--ledger "$HOME/week4-token22-complete-ledger" \
+--rpc-port 8900 \
+--faucet-port 9901 \
+--dynamic-port-range 10000-10100 \
+--bpf-program \
+TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb \
+"$HOME/week4-token22-programs/token2022-devnet.so" \
+--bpf-program \
+recr1L3PCGKLbckBqMNcJhuuyU1zgo8nBhfLVsJNwr5 \
+"$HOME/week4-token22-programs/spl-record-devnet.so"
 ```
 
-## Key Concepts
+Keep the validator running.
 
-### Balance Types
+Open Terminal 2 and verify connectivity:
 
-| Balance Type | Visibility | Purpose |
-|--------------|------------|---------|
-| **Public** | Visible on-chain | Standard SPL token balance |
-| **Pending** | Encrypted | Incoming transfers waiting to be applied |
-| **Available** | Encrypted | Usable confidential balance for transfers |
+```bash
+solana cluster-version --url http://127.0.0.1:8900
+```
 
-### Encryption Keys
+### Run the Complete Integration Test Suite
 
-Each confidential token account has two encryption keys derived from the owner's signature:
+From the repository root:
 
-1. **ElGamal Keypair** - Used for transfer encryption (derived from signing `"ElGamalSecretKey"`)
-2. **AES Key** - Used for balance decryption (derived from signing `"AeKey"`)
+```bash
+env -u PAYER_KEYPAIR \
+SOLANA_RPC_URL=http://127.0.0.1:8900 \
+cargo +stable test \
+--test integration_test \
+--test extensions_test \
+--test migration_test \
+--test confidential_approval_test \
+--test confidential_fee_transfer_test \
+--test v2_withdrawal_test \
+--test balance_migration_test \
+--test security_test \
+-- --nocapture --test-threads=1
+```
 
-### ZK Proofs Required for Transfers
+The tests generate temporary keypairs and use
+Localnet SOL for transaction fees and rent.
 
-| Proof Type | Purpose | Size |
-|------------|---------|------|
-| **Equality Proof** | Proves two ciphertexts encrypt the same value | Small |
-| **Ciphertext Validity** | Proves ciphertexts are properly generated | Small |
-| **Range Proof** | Proves value is in range [0, u64::MAX] | Large |
+Never commit private keys or wallet files.
 
-**Proof Context State Accounts**: To avoid transaction size limitations, each
-proof is pre-verified into a temporary on-chain account and the transfer
-instruction references it via `ProofLocation::ContextStateAccount`. The
-implementation in `src/transfer.rs` packs the full flow into **3
-transactions**:
+## Final Test Results
 
-1. **Tx 1**: create all three proof accounts (equality / validity / range)
-   and verify the **validity** proof.
-2. **Tx 2**: verify the **range** proof on its own — ~1006-byte ix, the
-   binding constraint on transaction size.
-3. **Tx 3**: verify the **equality** proof, run `inner_transfer`, and close
-   all three proof accounts to reclaim rent.
+Final regression testing was completed successfully
+on November 25, 2026.
 
-The proof accounts use the **payer** (not the sender) as the context-state
-authority. This keeps the sender out of the verify txs' `account_keys`,
-saving 32 bytes per tx — the difference between fitting and overflowing the
-1232-byte legacy tx-size limit on the range-verify tx. The sender still
-signs Tx 3 because it's the transfer's token-account authority.
+| Test suite | Passed | Failed | Runtime |
+|------------|--------|--------|---------|
+| Balance migration | 1 | 0 | 5.63s |
+| Confidential approval | 1 | 0 | 6.80s |
+| Confidential fee transfer | 1 | 0 | 30.34s |
+| Regulated extensions | 1 | 0 | 4.58s |
+| Confidential lifecycle | 5 | 0 | 49.61s |
+| V2 mint and delegate | 1 | 0 | 4.08s |
+| Security boundaries | 1 | 0 | 16.37s |
+| V2 withdrawal | 1 | 0 | 17.27s |
+| Total | 12 | 0 | 134.68s |
 
-## Resources
+All twelve integration tests passed.
 
-### Official Documentation
+See [Final Test Evidence](evidence/final-test-results.txt).
 
-- [Solana Program: Confidential Balances](https://www.solana-program.com/docs/confidential-balances) - Comprehensive guide
-- [Anza: ZK ElGamal Proof Program](https://docs.anza.xyz/runtime/zk-elgamal-proof) - Proof verification details
-- [SPL Token Confidential Transfer Overview](https://spl.solana.com/confidential-token/deep-dive/overview) - Protocol overview
-- [Token CLI Quickstart](https://spl.solana.com/confidential-token/quickstart) - Get started with CLI
+## Development Challenges and Lessons Learned
 
-### Guides & Tutorials
+During development, several technical challenges
+were investigated and resolved:
 
-- [QuickNode: Token-2022 Confidential Guide](https://www.quicknode.com/guides/solana-development/spl-tokens/token-2022/confidential) - Step-by-step implementation
-- [Token-2022 Program Documentation](https://spl.solana.com/token-2022) - Extension system overview
+- Solana transaction signer mismatches.
+- Oversized zero-knowledge proof transactions.
+- Confidential withdrawal proof staging.
+- Confidential fee account allocation.
+- Devnet faucet rate limitations.
+- Local validator program compatibility.
+- SDK version compatibility.
+- Encrypted fee verification.
+- Token supply conservation during migration.
+- Permanent Delegate security boundaries.
 
-### Code Repositories
+These challenges demonstrated the importance of
+integration testing, transaction inspection,
+cryptographic authority separation, and
+reproducible local development environments.
 
-- [Token-2022 Program](https://github.com/solana-program/token-2022) - Main program source
-- [ZK ElGamal Proof Program](https://github.com/solana-program/zk-elgamal-proof) - Proof verification program
-  - [JS Client](https://github.com/solana-program/zk-elgamal-proof/tree/main/clients/js) - Full JavaScript client
-  - [WASM SDK](https://github.com/solana-program/zk-elgamal-proof/tree/main/zk-sdk-wasm-js) - Browser-compatible crypto
-- [Confidential Balances Sample](https://github.com/solana-developers/Confidential-Balances-Sample) - Rust implementation examples
-- [Confidential Balances Microsite](https://github.com/solana-developers/confidential_balances_microsite) - Interactive web example
+## Potential Applications
 
-### Sample Transactions (Devnet)
+- Regulated stablecoins.
+- Tokenized real-world assets.
+- Institutional payments.
+- Privacy-preserving financial applications.
+- Compliance-controlled digital assets.
 
-- [Complete Transfer Flow](https://explorer.solana.com/tx/2rhcbfkr64koHWjoHCJKjbxxS6TonbRH1KVQUvZSFJwM7vnz181eb4eqSkgo3aEFmbnZT5K4z124jW2rRXGuAYU2?cluster=devnet)
-- [Deposit Transaction](https://explorer.solana.com/tx/wJw7HhX1p737XNvVwJLEwE7oCDuSxyJYZPD7xJqLWL4ao3osJ7bdmUoy8R5pTtfL2EqPysr8v2wgJRNTMM9VHsM?cluster=devnet)
-- [Apply Pending Balance](https://explorer.solana.com/tx/6y1aNHz7NzVzbEXxf4Rw5xV1EZ8CWFx1zamL9N49YkdJ3JKRpMSLVqdSGfBobSbiAj5zuxfyibwTC1NXgKdjWco?cluster=devnet)
+## Known Limitations
 
-## Documentation
+- This is an educational prototype.
+- No independent security audit has been performed.
+- KYC is simulated rather than externally verified.
+- Optional CPI Guard is not implemented.
+- MetadataPointer does not create complete token metadata.
+- Some balance decryption paths are limited to u32 values.
+- Proof-account cleanup on failure needs improvement.
+- Confidential fee collection and withdrawal are not
+  implemented as a complete administrative workflow.
+- Production migration requires a trusted mint-pair policy.
+- Administrative authorities should be separated
+  in production.
+- The inherited demo server was not included in the
+  final integration test scope.
 
-### Guides
-1. **[Product Guide](docs/guides/product-guide.md)** - Understanding the product from a high level
-2. **[Wallet Integration](docs/guides/wallet-integration.md)** - Integration patterns for wallet developers
+Do not use this implementation with real financial
+assets without further development and security review.
 
-### Technical Reference
-3. **[Token Extensions Architecture](docs/reference/token-extensions.md)** - Token-2022 program-level details
-4. **[Cryptography Reference](docs/reference/cryptography.md)** - Deep dive into the crypto primitives
-5. **[Rust Dependencies](docs/reference/rust-deps.md)** - Using the Rust crates
-6. **[JS/WASM Clients](docs/reference/js-clients.md)** - JavaScript and WASM SDK reference
+## Additional Documentation
 
-### Troubleshooting
-7. **[FAQ & Troubleshooting](docs/FAQ.md)** - Common issues and solutions
+The original workshop documentation is retained:
+
+- [Product Guide](docs/guides/product-guide.md)
+- [Wallet Integration](docs/guides/wallet-integration.md)
+- [Token Extensions](docs/reference/token-extensions.md)
+- [Cryptography](docs/reference/cryptography.md)
+- [Rust Dependencies](docs/reference/rust-deps.md)
+- [JavaScript and WASM Clients](docs/reference/js-clients.md)
+- [FAQ](docs/FAQ.md)
+
+## References
+
+- [Original Confidential Balances Sample](https://github.com/solana-foundation/Confidential-Balances-Sample)
+- [Token-2022 Program](https://github.com/solana-program/token-2022)
+- [Confidential Balances Documentation](https://www.solana-program.com/docs/confidential-balances)
+- [ZK ElGamal Proof Program](https://github.com/solana-program/zk-elgamal-proof)
+
+## Attribution
+
+This project builds upon the Solana Foundation
+Confidential Balances Sample.
+
+Credit for the original workshop, confidential
+balance implementation, examples, and documentation
+belongs to their respective upstream contributors.
+
+The additional regulated mint implementation,
+KYC controls, migration, encrypted fee support,
+compatibility fixes, security investigation, and
+integration tests were developed for the Week 4
+cohort assignment with AI-assisted development.
+
+## Author
+
+George Tsolos
+
+Solana Development Cohort - Week 4 Assignment
+
+November 2026
 
 ## License
 
-This workshop material is provided for educational purposes.
+The original workshop material is provided for
+educational purposes.
+
+This derivative project preserves upstream attribution.
+Consult the upstream project for applicable licensing
+terms before redistribution or commercial use.
