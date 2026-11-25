@@ -208,3 +208,208 @@ pub fn create_regulated_confidential_mint(
 
     Ok(mint)
 }
+
+/// Migrate public V1 tokens into V2 tokens atomically.
+///
+/// The owner authorizes the burn and the administrator
+/// authorizes the replacement minting.
+pub fn migrate_v1_to_v2(
+    client: &RpcClient,
+    payer: &dyn Signer,
+    owner: &dyn Signer,
+    administrator: &dyn Signer,
+    v1_mint: &solana_sdk::pubkey::Pubkey,
+    v2_mint: &solana_sdk::pubkey::Pubkey,
+    amount: u64,
+) -> crate::types::SigResult {
+    use spl_associated_token_account::
+        get_associated_token_address_with_program_id;
+
+    use spl_token_2022::{
+        extension::{
+            BaseStateWithExtensions,
+            StateWithExtensions,
+        },
+        instruction::{burn_checked, mint_to_checked},
+        state::Account,
+    };
+
+    if amount == 0 {
+        return Err("Migration amount must be positive".into());
+    }
+
+    if v1_mint == v2_mint {
+        return Err("V1 and V2 mints must be different".into());
+    }
+
+    let program_id = spl_token_2022::id();
+    let admin = administrator.pubkey();
+    let owner_address = owner.pubkey();
+
+    // Read both mint accounts.
+    let v1_data = client.get_account(v1_mint)?;
+    let v2_data = client.get_account(v2_mint)?;
+
+    if v1_data.owner != program_id
+        || v2_data.owner != program_id
+    {
+        return Err("Invalid mint program owner".into());
+    }
+
+    let v1_state =
+        StateWithExtensions::<Mint>::unpack(
+            &v1_data.data,
+        )?;
+
+    let v2_state =
+        StateWithExtensions::<Mint>::unpack(
+            &v2_data.data,
+        )?;
+
+    // Verify matching decimals.
+    if v1_state.base.decimals != v2_state.base.decimals {
+        return Err("Mint decimals do not match".into());
+    }
+
+    let decimals = v1_state.base.decimals;
+
+    // Verify administrator authority.
+    if v1_state.base.mint_authority != Some(admin).into()
+        || v2_state.base.mint_authority != Some(admin).into()
+    {
+        return Err("Unauthorized migration administrator".into());
+    }
+
+    // Verify expected V1 extensions.
+    let expected_v1 = [
+        ExtensionType::TransferFeeConfig,
+        ExtensionType::MetadataPointer,
+        ExtensionType::DefaultAccountState,
+        ExtensionType::MintCloseAuthority,
+    ];
+
+    let v1_extensions = v1_state.get_extension_types()?;
+
+    if v1_extensions.len() != expected_v1.len()
+        || !expected_v1.iter().all(
+            |extension| v1_extensions.contains(extension)
+        )
+    {
+        return Err("Invalid V1 mint extensions".into());
+    }
+
+    // Verify expected V2 extensions.
+    let v2_extensions = v2_state.get_extension_types()?;
+
+    if v2_extensions.len() != V2_EXTENSIONS.len()
+        || !V2_EXTENSIONS.iter().all(
+            |extension| v2_extensions.contains(extension)
+        )
+    {
+        return Err("Invalid V2 mint extensions".into());
+    }
+
+    // Derive the owner's token accounts.
+    let source =
+        get_associated_token_address_with_program_id(
+            &owner_address,
+            v1_mint,
+            &program_id,
+        );
+
+    let destination =
+        get_associated_token_address_with_program_id(
+            &owner_address,
+            v2_mint,
+            &program_id,
+        );
+
+    let source_data = client.get_account(&source)?;
+    let destination_data = client.get_account(&destination)?;
+
+    if source_data.owner != program_id
+        || destination_data.owner != program_id
+    {
+        return Err("Invalid token account program owner".into());
+    }
+
+    let source_state =
+        StateWithExtensions::<Account>::unpack(
+            &source_data.data,
+        )?;
+
+    let destination_state =
+        StateWithExtensions::<Account>::unpack(
+            &destination_data.data,
+        )?;
+
+    // Verify account ownership and mint association.
+    if source_state.base.owner != owner_address
+        || destination_state.base.owner != owner_address
+    {
+        return Err("Token account owner mismatch".into());
+    }
+
+    if source_state.base.mint != *v1_mint
+        || destination_state.base.mint != *v2_mint
+    {
+        return Err("Token account mint mismatch".into());
+    }
+
+    // Both accounts must be thawed.
+    if source_state.base.state != AccountState::Initialized
+        || destination_state.base.state != AccountState::Initialized
+    {
+        return Err("Both accounts require KYC approval".into());
+    }
+
+    if source_state.base.amount < amount {
+        return Err("Insufficient V1 token balance".into());
+    }
+
+    // Instruction 1: burn original V1 tokens.
+    let burn_ix = burn_checked(
+        &program_id,
+        &source,
+        v1_mint,
+        &owner_address,
+        &[],
+        amount,
+        decimals,
+    )?;
+
+    // Instruction 2: mint replacement V2 tokens.
+    let mint_ix = mint_to_checked(
+        &program_id,
+        v2_mint,
+        &destination,
+        &admin,
+        &[],
+        amount,
+        decimals,
+    )?;
+
+    // Both instructions execute atomically.
+    let blockhash = client.get_latest_blockhash()?;
+
+    let transaction = Transaction::new_signed_with_payer(
+        &[burn_ix, mint_ix],
+        Some(&payer.pubkey()),
+        &[payer, owner, administrator],
+        blockhash,
+    );
+
+    let signature =
+        client.send_and_confirm_transaction(
+            &transaction,
+        )?;
+
+    println!("Atomic V1 to V2 migration successful");
+    println!("V1 mint: {}", v1_mint);
+    println!("V2 mint: {}", v2_mint);
+    println!("Burned V1 base units: {}", amount);
+    println!("Minted V2 base units: {}", amount);
+    println!("Transaction: {}", signature);
+
+    Ok(signature)
+}
